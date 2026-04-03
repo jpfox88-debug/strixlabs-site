@@ -632,6 +632,8 @@ async function initSimli() {
       handleSilence: true,
       videoRef: videoEl,
       audioRef: audioEl,
+      transportMode: 'livekit',
+      signalingMode: 'livekit',
     });
 
     await simliClient.start();
