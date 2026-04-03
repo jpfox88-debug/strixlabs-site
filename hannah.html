@@ -415,13 +415,22 @@ const ELEVEN_VOICE_ID = 'FX7Ed0mBTbZ495AXR8ky';
 const ELEVEN_MODEL = 'eleven_multilingual_v2';
 // voice handled via proxy
 let voiceEnabled = true;
-// Unlock audio context on first user interaction (browser autoplay policy)
+// Single persistent AudioContext — created once, reused forever
 let audioUnlocked = false;
+let sharedAudioCtx = null;
+function getAudioCtx() {
+  if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+  return sharedAudioCtx;
+}
 function unlockAudio() {
   if (audioUnlocked) return;
   audioUnlocked = true;
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  ctx.resume().then(() => ctx.close());
+  const ctx = getAudioCtx();
+  // Play silent buffer to unlock
+  const buf = ctx.createBuffer(1, 1, 22050);
+  const src = ctx.createBufferSource();
+  src.buffer = buf; src.connect(ctx.destination); src.start(0);
 }
 document.addEventListener('click', unlockAudio, { once: true });
 document.addEventListener('touchstart', unlockAudio, { once: true });
@@ -449,9 +458,9 @@ async function speakText(text) {
     });
     if (res.ok) {
       const arrayBuffer = await res.arrayBuffer();
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioCtx = getAudioCtx();
       const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-      if (currentAudio) { currentAudio.stop && currentAudio.stop(); }
+      if (currentAudio) { try { currentAudio.stop(); } catch(e){} currentAudio = null; }
       const source = audioCtx.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(audioCtx.destination);
@@ -628,10 +637,7 @@ async function initSimli() {
 }
 
 async function speakWithSimli(text) {
-  const ELEVEN_KEY = window.__ELEVEN_KEY;
   const ELEVEN_VOICE = 'FX7Ed0mBTbZ495AXR8ky';
-
-  if (!ELEVEN_KEY || ELEVEN_KEY.includes('PASTE')) return;
 
   const clean = text
     .replace(/```[\s\S]*?```/g, '')
