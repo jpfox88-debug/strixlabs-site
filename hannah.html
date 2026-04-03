@@ -415,6 +415,16 @@ const ELEVEN_VOICE_ID = 'hkfHEbBvdQFNX4uWHqRF';
 const ELEVEN_MODEL = 'eleven_multilingual_v2';
 // voice handled via proxy
 let voiceEnabled = true;
+// Unlock audio context on first user interaction (browser autoplay policy)
+let audioUnlocked = false;
+function unlockAudio() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  ctx.resume().then(() => ctx.close());
+}
+document.addEventListener('click', unlockAudio, { once: true });
+document.addEventListener('touchstart', unlockAudio, { once: true });
 let currentAudio = null;
 
 function toggleVoice() {
