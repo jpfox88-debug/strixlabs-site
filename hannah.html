@@ -580,7 +580,7 @@ function chip(el){
 setMode('mode-widget');
 </script>
 <script type="module">
-import { SimliClient } from 'https://esm.sh/simli-client@3';
+import { SimliClient, generateSimliSessionToken } from 'https://esm.sh/simli-client@3';
 
 const SIMLI_API_KEY = 'rwq4j9njja9lg0q9d45b9';
 const SIMLI_FACE_ID = 'cace3ef7-a4c4-425d-a8cf-a5358eb0c427';
@@ -593,14 +593,28 @@ async function initSimli() {
   const videoEl  = document.getElementById('hannah-video');
   const audioEl  = document.getElementById('hannah-audio');
   if (!videoEl || !audioEl) return;
-  if (simliClient) return; // already initialised
+  if (simliClient) return; // already initialising or initialised
 
   try {
     statusEl.textContent = '● CONNECTING...';
     statusEl.className = 'simli-status simli-connecting';
     statusEl.style.color = 'var(--silver)';
 
-    simliClient = new SimliClient();
+    // Get session token first
+    const { session_token } = await generateSimliSessionToken(
+      { config: { faceId: SIMLI_FACE_ID, handleSilence: true, maxSessionLength: 600, maxIdleTime: 180 }, apiKey: SIMLI_API_KEY }
+    );
+
+    // Construct with correct v3 signature:
+    // (session_token, videoEl, audioEl, iceServers, logLevel, transport_mode)
+    simliClient = new SimliClient(
+      session_token,
+      videoEl,
+      audioEl,
+      null,        // iceServers — not needed for livekit
+      'warn',      // logLevel
+      'livekit'    // transport_mode — MUST be livekit to avoid ICE server requirement
+    );
 
     simliClient.on('connected', () => {
       simliReady = true;
@@ -616,24 +630,12 @@ async function initSimli() {
       statusEl.style.color = '#e74c3c';
     });
 
-    simliClient.on('failed', (e) => {
+    simliClient.on('error', (e) => {
       simliReady = false;
       statusEl.textContent = '● OFFLINE';
       statusEl.className = 'simli-status';
       statusEl.style.color = '#e74c3c';
-      console.warn('Simli failed:', e);
-    });
-
-    await simliClient.Initialize({
-      apiKey: SIMLI_API_KEY,
-      faceId: SIMLI_FACE_ID,
-      maxSessionLength: 600,
-      maxIdleTime: 180,
-      handleSilence: true,
-      videoRef: videoEl,
-      audioRef: audioEl,
-      transportMode: 'livekit',
-      signalingMode: 'livekit',
+      console.warn('Simli error:', e);
     });
 
     await simliClient.start();
