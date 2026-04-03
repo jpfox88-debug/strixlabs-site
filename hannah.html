@@ -297,7 +297,7 @@ body.mode-chat .hw-disc{display:none}
       </div>
       <div class="hw-inp">
         <input type="text" id="hw-in" placeholder="Ask Hannah anything..." autocomplete="off" onkeydown="if(event.key==='Enter')send()">
-        <button class="hw-send" id="hw-btn" onclick="send()">
+        <button class="hw-send" id="hw-btn" onclick="unlockAudio();send()">
           <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
@@ -538,6 +538,15 @@ async function send(ov){
 }
 
 function chip(el){
+  // Unlock audio immediately on this user gesture before any async work
+  if(!audioUnlocked){
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    ctx.resume();
+    const buf=ctx.createBuffer(1,1,22050);
+    const src=ctx.createBufferSource();
+    src.buffer=buf; src.connect(ctx.destination); src.start(0);
+    audioUnlocked=true;
+  }
   if(document.body.classList.contains('mode-intro')){startChat();setTimeout(()=>send(el.textContent),150)}
   else{if(!started)initChat();send(el.textContent)}
 }
