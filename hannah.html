@@ -275,7 +275,7 @@ body.mode-chat .hw-disc{display:none}
     <div class="chat-face-col">
       <div class="simli-wrap">
         <video id="hannah-video" autoplay playsinline muted></video>
-        <audio id="hannah-audio" autoplay></audio>
+        <audio id="hannah-audio" autoplay playsinline></audio>
       </div>
       <div class="simli-status" id="simli-status" style="color:var(--silver)">● CONNECTING...</div>
       <div>
@@ -408,6 +408,8 @@ function goWidget()   { setMode('mode-widget'); }
 function goIntro()    { setMode('mode-intro'); }
 function goFullChat() { setMode('mode-chat'); if(!started)initChat(); if(window.__simliInit && !window.__simliReady()) window.__simliInit(); }
 function startChat()  { setMode('mode-chat'); if(!started)initChat(); if(window.__simliInit && !window.__simliReady()) window.__simliInit(); }
+// Init Simli immediately so it's ready by the time user asks a question
+window.addEventListener('load', () => { setTimeout(() => { if(window.__simliInit) window.__simliInit(); }, 500); });
 
 /* ══ ELEVENLABS VOICE ══ */
 // Keys handled server-side via hannah-proxy
@@ -544,7 +546,15 @@ async function send(ov){
     const data=await res.json();
     const reply=data.content?.[0]?.text||"Something went wrong — try again?";
     hideT();addMsg('hannah',reply);history.push({role:'assistant',content:reply});
-    if(window.__simliReady && window.__simliReady()) {
+    // Wait up to 4s for Simli to be ready, then use it exclusively
+    // If Simli is ready: it handles audio + lip sync
+    // If not ready after wait: fall back to speakText only
+    let waited = 0;
+    while (!window.__simliReady?.() && waited < 4000) {
+      await new Promise(r => setTimeout(r, 200));
+      waited += 200;
+    }
+    if (window.__simliReady && window.__simliReady()) {
       window.__simliSpeak(reply);
     } else {
       speakText(reply);
@@ -651,7 +661,7 @@ async function speakWithSimli(text) {
   if (!clean) return;
 
   try {
-    const resp = await fetch(`https://hannah-proxy.onrender.com/api/speak`, {
+    const resp = await fetch(`https://hannah-proxy.onrender.com/api/speak-pcm`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -661,7 +671,7 @@ async function speakWithSimli(text) {
       })
     });
 
-    if (resp.ok && simliReady && simliClient) {
+    if (resp.ok && simliClient) {
       const buf = await resp.arrayBuffer();
       simliClient.ClearBuffer();
       simliClient.sendAudioData(new Uint8Array(buf));
