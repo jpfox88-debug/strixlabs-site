@@ -593,56 +593,57 @@ async function initSimli() {
   const videoEl  = document.getElementById('hannah-video');
   const audioEl  = document.getElementById('hannah-audio');
   if (!videoEl || !audioEl) return;
+  if (simliClient) return; // already initialised
 
   try {
     statusEl.textContent = '● CONNECTING...';
     statusEl.className = 'simli-status simli-connecting';
     statusEl.style.color = 'var(--silver)';
 
-    const resp = await fetch('https://api.simli.ai/compose/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-simli-api-key': SIMLI_API_KEY },
-      body: JSON.stringify({
-        faceId: SIMLI_FACE_ID,
-        maxSessionLength: 600,
-        maxIdleTime: 180,
-        handleSilence: true,
-        audioInputFormat: 'pcm16'
-      })
-    });
-    const { session_token } = await resp.json();
+    simliClient = new SimliClient();
 
-    simliClient = new SimliClient(session_token, videoEl, audioEl, null, 'warn', 'livekit');
-
-    simliClient.on('start', () => {
+    simliClient.on('connected', () => {
       simliReady = true;
       statusEl.textContent = '● LIVE';
       statusEl.className = 'simli-status';
       statusEl.style.color = '#00CEC9';
     });
 
-    simliClient.on('error', (e) => {
+    simliClient.on('disconnected', () => {
       simliReady = false;
       statusEl.textContent = '● OFFLINE';
       statusEl.className = 'simli-status';
       statusEl.style.color = '#e74c3c';
-      console.warn('Simli error:', e);
     });
 
-    simliClient.on('stop', () => {
+    simliClient.on('failed', (e) => {
       simliReady = false;
-      statusEl.textContent = '● ENDED';
+      statusEl.textContent = '● OFFLINE';
       statusEl.className = 'simli-status';
-      statusEl.style.color = 'var(--silver)';
+      statusEl.style.color = '#e74c3c';
+      console.warn('Simli failed:', e);
+    });
+
+    await simliClient.Initialize({
+      apiKey: SIMLI_API_KEY,
+      faceId: SIMLI_FACE_ID,
+      maxSessionLength: 600,
+      maxIdleTime: 180,
+      handleSilence: true,
+      videoRef: videoEl,
+      audioRef: audioEl,
     });
 
     await simliClient.start();
 
   } catch(e) {
     console.warn('Simli init error:', e);
-    statusEl.textContent = '● OFFLINE';
-    statusEl.className = 'simli-status';
-    statusEl.style.color = '#e74c3c';
+    if (statusEl) {
+      statusEl.textContent = '● OFFLINE';
+      statusEl.className = 'simli-status';
+      statusEl.style.color = '#e74c3c';
+    }
+    simliClient = null;
   }
 }
 
